@@ -1,0 +1,9 @@
+name: visual_bp
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9.16
+  - pip:
+      - ipykernel
+      - matplotlib
+      - matplotlib-inline
