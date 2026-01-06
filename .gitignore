@@ -21,6 +21,7 @@ sdist/
 var/
 wheels/
 share/python-wheels/
+pyspark_to_production/data/model
 *.egg-info/
 .installed.cfg
 *.egg
