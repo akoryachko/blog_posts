@@ -388,8 +388,8 @@ As expected, the dataframes dictionary gets filled here.
 Though the decision about putting it here or in the higher level function depends on implementation as well as whether to keep `file_path` and `dataset_names` variables within the functions or pass them as a part of configuration structure.
 
 This concludes the `extract` chapter, so we can move forward to the next one.
-The changes are similar to the ones for the `extract` method and available in full in the [!!!!corresponding module!!!!](addalink).
-Below is an extract showing that the general structure of chapters followed by sections and subsections is still intact:
+The changes for other methods are similar to the ones for the `extract` method and available in full in the [corresponding module](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/src/tip_amount_model.py).
+Below is an extract showing that the general structure of the chapters followed by sections and subsections is still intact:
 ```python
     def transform(self) -> None:
         logger.info("Preparing the data for training")
@@ -419,6 +419,108 @@ Below is an extract showing that the general structure of chapters followed by s
         ...
     
     ...
+```
+
+#### 3.2 Logging module
+The logger creation boilerplate deserves [its own module](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/src/log_config.py) because it standardizes the logging format and conventions.
+Any function that is useful across jobs should follow the logging module suite and be imported as opposed to defined:
+```python
+from log_config import get_logger
+logger = get_logger(__file__)
+```
+One caveat with independent functions is that all parameters for such function should be passed instead of being available through `self`.
+
+### Step 4. Interact with the modules through a notebook
+Having the code in functions across modules while beneficial for production can scare Data Scientists from going that route because of an unintuitive environment.
+Moreover, debugging and introducing new features can be impeded due to not as intuitive way of interaction with the code.
+However, one can debug and modify the module code from a notebook with the following approach.
+
+#### 4.1 Debugging
+The first step to debugging a module in a notebook is making it available for import.
+One of the ways to do that is to add the corresponding path to the list of paths python uses for importing the modules.
+In our case something like that should work:
+```python
+import sys
+sys.path.append('../src')
+```
+
+Next step is importing the required classes from the module and creating the corresponding objects:
+```python
+from tip_amount_model import TipAmountModelConfig, TipAmountModel
+config = TipAmountModelConfig()
+job = TipAmountModel(config)
+```
+
+Finally, run the main function to make sure everything is working.
+In our case it is:
+```python
+job.run()
+```
+
+In case of bugs, the error messages will appear allowing to identify and fix them.
+Class parameters are available for inspection through the class instance.
+For example, one of the intermediate datasets can be checked as follows:
+```python
+job.sdfs["training"].show(5)
+```
+
+Different stages can be rerun after modifying parameters directly.
+The training and validation stages can be rerun after reducing the test fraction as follows:
+```python
+job.config.test_fraction = 0.01
+job.transform()
+job.validate()
+```
+
+Restart the notebook after the fixing the bugs in the module.
+This way the changes take place for the next try.
+Another option is to use the following Jupyter magic to make the update process automatic:
+```python
+%load_ext autoreload
+%autoreload 2
+```
+
+#### 4.2 Prototyping
+Another reason for interacting with the module could be trying out new things outside of what is reachable with parameter modification.
+For example, we want to try a different model.
+This requires a code modification.
+We don't want to modify the repo but just play around with the class instance.
+Let's start with defining the modified function in a cell:
+```python
+from pyspark.ml import Pipeline
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.regression import GBTRegressor
+
+def train_model(self) -> None:
+    assembler = VectorAssembler(inputCols=self.feature_cols, outputCol="features")
+
+    gbt = GBTRegressor(
+        labelCol="tip_amount",
+        featuresCol="features",
+        predictionCol="prediction",
+        stepSize=0.1,
+        maxDepth=4,
+        featureSubsetStrategy="auto",
+        seed=42,
+    )
+
+    pipeline = Pipeline(stages=[assembler, gbt])
+
+    self.model = pipeline.fit(self.sdfs["training"])
+
+    print("Modified content")
+```
+
+Then we need to bind this function to the class instance:
+```python
+import types
+job.train_model = types.MethodType(train_model, job)
+```
+
+And run the required stages to see the updated results.
+```python
+job.transform()
+job.validate()
 ```
 
 

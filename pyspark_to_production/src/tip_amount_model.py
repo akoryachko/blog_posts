@@ -52,7 +52,7 @@ class TipAmountModel:
         self.load()
 
     def extract(self) -> None:
-        self.logger.info("Extracting datasets")
+        logger.info("Extracting datasets")
         dataset_names = [
             "taxi_trip_data",
             "taxi_zone_geo",
@@ -93,54 +93,86 @@ class TipAmountModel:
 
     def limit_history_to_a_range(self, sdf: DataFrame) -> DataFrame:
         pickup_month = F.date_format(F.col("pickup_datetime"), "yyyyMM")
-        return sdf.filter(pickup_month > self.config.history_start_month).filter(
-            pickup_month <= self.config.history_end_month
+        # fmt: off
+        return (
+            sdf
+            .filter(pickup_month > self.config.history_start_month)
+            .filter(pickup_month <= self.config.history_end_month)
         )
+        # fmt: on
 
     def keep_evening_rides_only(self, sdf: DataFrame) -> DataFrame:
         dropoff_hour = F.date_format(F.col("dropoff_datetime"), "HH")
-        return sdf.filter(dropoff_hour >= self.config.first_evening_hour).filter(
-            dropoff_hour <= self.config.last_evening_hour
+        # fmt: off
+        return (
+            sdf
+            .filter(dropoff_hour >= self.config.first_evening_hour)
+            .filter(dropoff_hour <= self.config.last_evening_hour)
         )
+        # fmt: on
 
     def exclude_airports_by_location(
         self, sdf: DataFrame, location_id_col_name: str
     ) -> DataFrame:
-        sdf_zone_geo_no_airport = self.sdfs["taxi_zone_geo"].filter(
-            ~F.lower(F.col("zone_name")).like("%airport%")
+        # fmt: off
+        sdf_zone_geo_no_airport = (
+            self.sdfs["taxi_zone_geo"]
+            .filter(~F.lower(F.col("zone_name")).like("%airport%"))
         )
-        return sdf.join(
-            sdf_zone_geo_no_airport,
-            on=[F.col(location_id_col_name) == F.col("zone_id")],
-            how="leftsemi",
+        return (
+            sdf
+            .join(
+                sdf_zone_geo_no_airport,
+                on=[F.col(location_id_col_name) == F.col("zone_id")],
+                how="leftsemi"
+            )
         )
+        # fmt: on
 
     def keep_first_n_daily_rides_only(self, sdf: DataFrame) -> DataFrame:
         pickup_date = F.date_format(F.col("pickup_datetime"), "yyyyMMdd")
-        window = Window.partitionBy("pickup_location_id", pickup_date).orderBy(
-            F.asc("pickup_datetime")
+        # fmt: off
+        window = (
+            Window
+            .partitionBy("pickup_location_id", pickup_date)
+            .orderBy(F.asc("pickup_datetime"))
         )
         return (
-            sdf.withColumn("ride_number", F.row_number().over(window))
+            sdf
+            .withColumn("ride_number", F.row_number().over(window))
             .filter(F.col("ride_number") <= self.config.n_first_daily_rides_to_keep)
             .drop("ride_number")
         )
+        # fmt: on
 
-    def add_features(self, sdf: DataFrame) -> DataFrame:
+    @staticmethod
+    def add_features(sdf: DataFrame) -> DataFrame:
+        date_metrics = {
+            "month": F.month,
+            "day_of_week": F.dayofweek,
+            "day_of_month": F.dayofmonth,
+        }
+        # fmt: off
         return (
-            sdf.withColumn("month", F.month(F.col("pickup_datetime")))
-            .withColumn("day_of_week", F.dayofweek(F.col("pickup_datetime")))
-            .withColumn("day_of_month", F.dayofmonth(F.col("pickup_datetime")))
+            sdf
+            .withColumns({
+                name: func(F.col("pickup_datetime"))
+                for name, func in date_metrics.items()
+            })
             .withColumn(
                 "store_and_fwd_flag",
-                F.when(F.col("store_and_fwd_flag") == "N", 0).otherwise(1),
+                F.when(F.col("store_and_fwd_flag") == "N", 0).otherwise(1)
             )
         )
+        # fmt: on
 
     def train_test_split(self) -> None:
-        self.sdfs["training"], self.sdfs["test"] = self.sdfs[
-            "prepared_data"
-        ].randomSplit(weights=[1 - self.test_fraction, self.test_fraction], seed=42)
+        # fmt: off
+        self.sdfs["training"], self.sdfs["test"] = (
+            self.sdfs["prepared_data"]
+            .randomSplit(weights=[1 - self.config.test_fraction, self.config.test_fraction], seed=42)
+        )
+        # fmt: on
 
     def train_model(self) -> None:
         assembler = VectorAssembler(inputCols=self.feature_cols, outputCol="features")
@@ -170,9 +202,8 @@ class TipAmountModel:
         importances = zip(
             self.feature_cols, self.model.stages[-1].featureImportances, strict=False
         )
-        for name, importance in sorted(
-            importances, key=lambda item: item[1], reverse=True
-        ):
+        importances_sorted = sorted(importances, key=lambda item: item[1], reverse=True)
+        for name, importance in importances_sorted:
             logger.info("%22s = %.2g", name, importance)
 
     def check_evaluation_metrics(self) -> None:
