@@ -286,13 +286,140 @@ logger.addHandler(sh)
 logger.info("Tip amount model logger is initialized!")
 ```
 
-### Step 3. Put the code in a module
+### Step 3. Put the code in modules
 While good for prototyping, a notebook poses challenges for code readability and reusability.
 For example, a natural flow of reading starts with the largest abstraction sections like title and chapter name if we take a book.
 A notebook forces us to define the low level abstraction function first to use them in the following cells thus breaking the readability flow and making it hard to navigate the code.
 Reusability also lacks because the functions defined in the notebook can not be easily reused in other notebooks.
-Hence, the next step towards a production ready solution is to put the code in `.py` files.
+Hence, the next step towards a production ready solution is to put the code in `.py` files located in `src` directory.
 
+#### 3.1 Main module
+The majority of code will go the the main module called `tip_amount_model.py`.
+
+We used quite a number of parameters and variables across the functions.
+Passing those parameters from the main function will blow up functions definitions.
+A better way to share parameters across a number of logically connected function is to put them in a class.
+This way the shared parameters will be accessible through the `self` attribute.
+
+The class definition will then look like follows:
+```python
+class TipAmountModel():
+    def __init__(self, config: TipAmountModelConfig) -> None:
+        self.config = config
+        self.spark = SparkSession.builder.getOrCreate()
+        self.sdfs = {}
+        self.model = None
+        self.feature_cols = feature_cols
+```
+
+Here we
+- pass the configuration variables in one structure,
+- create logger with the class name (`TipAmountModel`),
+- bind the internal class variable to the existing or newly created spark session,
+- define other shared variables.
+
+The configuration variables class makes it easier to run the job with different parameters.
+A type validation for the passed parameters is typically a good idea, so a dataclass is preferred over, say, a dictionary:
+```python
+from dataclasses import dataclass
+
+@dataclass
+class TipAmountModelConfig:
+    history_start_month: str = "201703"
+    history_end_month: str = "201811"
+    first_evening_hour: str = "17"
+    last_evening_hour: str = "23"
+    n_first_daily_rides_to_keep: int = 3
+    test_fraction: float = 0.2
+    feature_cols: list[str] = [
+        "passenger_count",
+        "trip_distance",
+        "rate_code",
+        "store_and_fwd_flag",
+        "payment_type",
+        "fare_amount",
+        "tolls_amount",
+        "imp_surcharge",
+        "month",
+        "day_of_week",
+        "day_of_month",
+    ]
+```
+
+Next, let's define the top abstraction level function that runs the whole script.
+```python
+class TipAmountModel():
+    ...
+    def run(self):
+        self.extract()
+        self.transform()
+        self.validate()
+        self.load()
+```
+
+This is the table of contents for our script located just one required function away from the title.
+The table of contents facilitates navigation across the script chapter by chapter.
+Hence, the next function defined should be chapter 1 - `extract()`:
+```python
+    def extract(self) -> None:
+        logger.info("Extracting datasets")
+        dataset_names = [
+            "taxi_trip_data",
+            "taxi_zone_geo",
+        ]
+        for dataset_name in dataset_names:
+            self.read_dataset(dataset_name)
+```
+
+The function has a number of modifications compared to the one in the refactored notebook:
+- take `self` as an input parameter. This allows to have an access to all class variables;
+- nothing to return. Class variables allow for assignment through `self` so no need to pass things around;
+- the dataframes dictionary gets filled outside of the function through the `self` variable.
+
+The `extract` function calls a lower abstraction level function `read_dataset`.
+This means that the `read_dataset` function definition should go next to not interrupt the flow similar to how section goes within the chapter.
+```python
+    def read_dataset(self, dataset_name: str) -> None:
+        file_path = f"../data/{dataset_name}.csv"
+        self.sdfs[dataset_name] = self.spark.read.csv(file_path, header=True, inferSchema=True)
+```
+
+As expected, the dataframes dictionary gets filled here.
+Though the decision about putting it here or in the higher level function depends on implementation as well as whether to keep `file_path` and `dataset_names` variables within the functions or pass them as a part of configuration structure.
+
+This concludes the `extract` chapter, so we can move forward to the next one.
+The changes are similar to the ones for the `extract` method and available in full in the [!!!!corresponding module!!!!](addalink).
+Below is an extract showing that the general structure of chapters followed by sections and subsections is still intact:
+```python
+    def transform(self) -> None:
+        logger.info("Preparing the data for training")
+        self.prepare_data()
+        ...
+    
+    def prepare_data(self) -> None:
+        self.sdfs["prepared_data"] = (
+            self.sdfs["taxi_trip_data"]
+            .transform(self.filter_data)
+            .transform(self.add_features)
+        )
+
+    def filter_data(self, sdf: DataFrame) -> DataFrame:
+        return (
+            sdf
+            .dropDuplicates()
+            .transform(self.limit_history_to_a_range)
+            .transform(self.keep_evening_rides_only)
+            ...
+        )
+
+    def limit_history_to_a_range(self, sdf: DataFrame) -> DataFrame:
+        ...
+    
+    def keep_evening_rides_only(self, sdf: DataFrame) -> DataFrame:
+        ...
+    
+    ...
+```
 
 
 <!-- 

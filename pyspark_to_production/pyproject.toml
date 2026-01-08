@@ -90,7 +90,8 @@ lint.ignore = [
     "EM102", # Flake8-errmsg - Checks for the use of f-strings in exception constructors.
     "RUF001", # Ruff-specific rules - Checks for ambiguous Unicode characters in strings.
     "COM812", # Flake8-commas - Checks for the absence of trailing commas.
+    "N812", # pep8-naming linter - Checks for lowercase imports that are aliased to non-lowercase names.
 ]
 exclude = [
-    "src/notebook.ipynb",
+    "notebooks/",
 ]
