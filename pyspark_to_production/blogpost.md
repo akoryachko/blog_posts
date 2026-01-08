@@ -24,7 +24,7 @@ The model should be updated in a regular schedule with the new data at hand.
 We should have a way to check feature importance and evaluation metrics for each run.
 
 ## Notebook
-The full notebook with code can be found [here](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/src/notebook.ipynb).
+The full notebook with code can be found [here](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/notebooks/notebook.ipynb).
 
 ## Refactoring
 Once we made sure the notebook produces the result for a single run, it is time to make it pretty.
@@ -246,30 +246,34 @@ def train_test_split(sdf: DataFrame) -> tuple[DataFrame]:
     )
 ```
 
-Wrapping model training and evaluation code into functions is straightforward.
+Wrapping model training and evaluation code into functions is straightforward and can be found in the [refactored notebook](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/notebooks/notebook_refactored.ipynb).
+After that, the executable code shrinks to the definition of parameters and an ETL like framework:
+```python
+sdfs = extract()
+model = transform()
+validate()
+load()
+```
+
 
 ### Step 2. Add logging
-We have a number of print statement that show model quality after each training.
-While fine for POC, print statements are not suitable for production code and have to be replaced with logging.
-I will use the standard output handler for the logger just to show that it can be used for printing things to the console.
-However, having logs set in this way will make adding a file handler for the logs straightforward.
-
-The minimum logger set up would look something like the following:
+We have a number of print statements that show model quality after a training.
+While acceptable for POC, print statements are not suitable for production code and have to be replaced with logging.
+The following set up along with changing `print` to `logger.info` will produce the same result:
 ```python
 import logging
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('blogpost_logger')
-
-logger.info("Blogpost logger is initialized!")
+logger = logging.getLogger('tip_amount_model_logger')
 ```
 
-Handlers and formatters will increase the boilerplate but will also provide more control and an easier transition to logging into files:
+This boilerplate can be further expanded to format the message and make it easier to change from the standard output to writing logs to a file later.
+
 ```python
 import logging
 
-logger = logging.getLogger("blogpost_logger")
-logger.setLevel(logging.DEBUG) # lowest level for the logger
+logger = logging.getLogger("tip_amount_model_logger")
+logger.setLevel(logging.DEBUG) # lowest level to capture by the logger
 
 logger.handlers.clear() # remove existing handlers to not accidentally duplicate them
 sh = logging.StreamHandler() # handler for printing messages to console. Will need file handler in prod
@@ -279,9 +283,25 @@ f = logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s", "%Y-%m-%d %H:%
 sh.setFormatter(f)
 logger.addHandler(sh)
 
-logger.info("Blogpost logger is initialized!")
+logger.info("Tip amount model logger is initialized!")
 ```
 
+### Step 3. Put the code in a module
+While good for prototyping, a notebook poses challenges for code readability and reusability.
+For example, a natural flow of reading starts with the largest abstraction sections like title and chapter name if we take a book.
+A notebook forces us to define the low level abstraction function first to use them in the following cells thus breaking the readability flow and making it hard to navigate the code.
+Reusability also lacks because the functions defined in the notebook can not be easily reused in other notebooks.
+Hence, the next step towards a production ready solution is to put the code in `.py` files.
 
-[//]: # (Even the code creators forget what they meant with certain lines of code and have to rewrite things from scratch once requirements change.)
-[//]: # (Moreover, the same pieces of code keep being rewritten over and over causing longer development cycles and higher chances of errors.)
+
+
+<!-- 
+Even the code creators forget what they meant with certain lines of code and have to rewrite things from scratch once requirements change.
+Moreover, the same pieces of code keep being rewritten over and over causing longer development cycles and higher chances of errors.
+I will use the standard output handler for the logger just to show that it can be used for printing things to the console.
+However, having logs set in this way will make adding a file handler for the logs straightforward.
+
+The minimum logger set up would look something like the following:
+
+Handlers and formatters will increase the boilerplate but will also provide more control and an easier transition to logging into files:
+-->
