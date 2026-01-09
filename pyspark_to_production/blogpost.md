@@ -255,7 +255,6 @@ validate()
 load()
 ```
 
-
 ### Step 2. Add logging
 We have a number of print statements that show model quality after a training.
 While acceptable for POC, print statements are not suitable for production code and have to be replaced with logging.
@@ -286,14 +285,14 @@ logger.addHandler(sh)
 logger.info("Tip amount model logger is initialized!")
 ```
 
-### Step 3. Put the code in modules
+## Putting the code in modules
 While good for prototyping, a notebook poses challenges for code readability and reusability.
 For example, a natural flow of reading starts with the largest abstraction sections like title and chapter name if we take a book.
 A notebook forces us to define the low level abstraction function first to use them in the following cells thus breaking the readability flow and making it hard to navigate the code.
 Reusability also lacks because the functions defined in the notebook can not be easily reused in other notebooks.
 Hence, the next step towards a production ready solution is to put the code in `.py` files located in `src` directory.
 
-#### 3.1 Main module
+### Step 1. Create main module
 The majority of code will go the the main module called `tip_amount_model.py`.
 
 We used quite a number of parameters and variables across the functions.
@@ -421,21 +420,21 @@ Below is an extract showing that the general structure of the chapters followed 
     ...
 ```
 
-#### 3.2 Logging module
+### Step 2. Create supporting modules
 The logger creation boilerplate deserves [its own module](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/src/log_config.py) because it standardizes the logging format and conventions.
 Any function that is useful across jobs should follow the logging module suite and be imported as opposed to defined:
 ```python
 from log_config import get_logger
-logger = get_logger(__file__)
+logger = get_logger(__name__)
 ```
 One caveat with independent functions is that all parameters for such function should be passed instead of being available through `self`.
 
-### Step 4. Interact with the modules through a notebook
+## Interacting with modules through a notebook
 Having the code in functions across modules while beneficial for production can scare Data Scientists from going that route because of an unintuitive environment.
 Moreover, debugging and introducing new features can be impeded due to not as intuitive way of interaction with the code.
 However, one can debug and modify the module code from a notebook with the following approach.
 
-#### 4.1 Debugging
+### Reason 1. Debugging
 The first step to debugging a module in a notebook is making it available for import.
 One of the ways to do that is to add the corresponding path to the list of paths python uses for importing the modules.
 In our case something like that should work:
@@ -464,6 +463,7 @@ For example, one of the intermediate datasets can be checked as follows:
 job.sdfs["training"].show(5)
 ```
 
+### Reason 2. Trying out different parameter values
 Different stages can be rerun after modifying parameters directly.
 The training and validation stages can be rerun after reducing the test fraction as follows:
 ```python
@@ -480,7 +480,7 @@ Another option is to use the following Jupyter magic to make the update process 
 %autoreload 2
 ```
 
-#### 4.2 Prototyping
+### Reason 3. Prototyping
 Another reason for interacting with the module could be trying out new things outside of what is reachable with parameter modification.
 For example, we want to try a different model.
 This requires a code modification.
@@ -517,12 +517,55 @@ import types
 job.train_model = types.MethodType(train_model, job)
 ```
 
-And run the required stages to see the updated results.
+And run the required stages to see the results.
 ```python
 job.transform()
 job.validate()
 ```
 
+All these examples can be found and run in [the playground notebook](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/notebooks/playground.ipynb).
+
+## Unit testing
+A big difference between a proof of concept notebook and production code is that the latter has to be run multiple times and be resilient to updates.
+We want to make sure that code changes do not break functionality before it hits production.
+Thus, testing the functionality before shipping code changes in production should prevent a decent amount of rollbacks and hot fixes.
+
+### Stage 1. Raw code in a notebook cell
+
+The easiest way to start unit testing is to write test functions in the code interaction module from the previous section.
+Let's make sure that the `add_features` function produces the columns that we listed in `feature_cols`.
+Code for testing that can look something like this:
+```python
+from datetime import datetime
+
+def is_subset(a: list, b: list) -> bool:
+    return set(a) <= set(b)
+
+data = [
+    (datetime(2021, 1, 1, 12, 0, 0), "Y"),
+    (datetime(2021, 6, 15, 9, 30, 0), "N")
+]
+
+expected_columns = job.feature_cols[-4:]
+
+sdf_fake_input = job.spark.createDataFrame(data, schema=["pickup_datetime", "store_and_fwd_flag"])
+assert not is_subset(expected_columns, sdf_fake_input.columns)
+
+sdf_fake_features = job.add_features(sdf_fake_input)
+assert is_subset(expected_columns, sdf_fake_features.columns)
+```
+
+The code creates fake data, makes sure that not all of the feature columns are present before applying the function, and that all of them are there after the function is applied.
+This way, something like an accidental column renaming in the function or in the `feature_cols` would make this code raise an assertion error.
+
+### Stage 2. Function in a notebook cell
+Raw code in a cell will work but it has a number of disadvantages starting with the reuse of `job` variable created, and potentially modified along the way, and ending with custom fake data that has to be adjusted in every such function if the input data schema changes.
+We can refactor such a code in a function that independently creates all the variables and create a fake data generator that can be reused by other functions.
+
+Let's add a test function that makes sure all the features we have are numeric before passing the dataframe to the training stage that will definitely fail if that is not the case.
+We will start with a fake data generators for our datasets.
+The generators will generate a single data row that contains modifiable default values.
+This way only the values of interest can be created instead of the whole data.
 
 <!-- 
 Even the code creators forget what they meant with certain lines of code and have to rewrite things from scratch once requirements change.

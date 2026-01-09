@@ -6,10 +6,11 @@ from pyspark.ml.evaluation import RegressionEvaluator
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.regression import RandomForestRegressor
 from pyspark.sql import DataFrame, SparkSession, Window
+import os
 
 from log_config import get_logger
 
-logger = get_logger(__file__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -26,7 +27,6 @@ feature_cols = [
     "passenger_count",
     "trip_distance",
     "rate_code",
-    "store_and_fwd_flag",
     "payment_type",
     "fare_amount",
     "tolls_amount",
@@ -34,6 +34,7 @@ feature_cols = [
     "month",
     "day_of_week",
     "day_of_month",
+    "store_and_fwd_flag_is_N",
 ]
 
 
@@ -58,6 +59,7 @@ class TipAmountModel:
             "taxi_zone_geo",
         ]
         for dataset_name in dataset_names:
+            logger.info(f"  {dataset_name}...")
             self.read_dataset(dataset_name)
 
     def read_dataset(self, dataset_name: str) -> None:
@@ -160,8 +162,8 @@ class TipAmountModel:
                 for name, func in date_metrics.items()
             })
             .withColumn(
-                "store_and_fwd_flag",
-                F.when(F.col("store_and_fwd_flag") == "N", 0).otherwise(1)
+                "store_and_fwd_flag_is_N",
+                F.when(F.col("store_and_fwd_flag") == "N", 1).otherwise(0)
             )
         )
         # fmt: on
