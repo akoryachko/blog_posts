@@ -6,9 +6,8 @@ from pyspark.ml.evaluation import RegressionEvaluator
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.regression import RandomForestRegressor
 from pyspark.sql import DataFrame, SparkSession, Window
-import os
 
-from log_config import get_logger
+from pyspark_to_production.src.log_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -41,7 +40,7 @@ feature_cols = [
 class TipAmountModel:
     def __init__(self, config: TipAmountModelConfig) -> None:
         self.config = config
-        self.spark = SparkSession.builder.config("spark.driver.bindAddress", "127.0.0.1").config("spark.driver.host", "127.0.0.1").getOrCreate()
+        self.spark = SparkSession.builder.getOrCreate()
         self.sdfs = {}
         self.model = None
         self.feature_cols = feature_cols
@@ -49,6 +48,7 @@ class TipAmountModel:
     def run(self) -> None:
         self.extract()
         self.transform()
+        self.train()
         self.validate()
         self.load()
 

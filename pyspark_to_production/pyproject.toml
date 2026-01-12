@@ -5,11 +5,16 @@ description = "Repo for a blogpost for transforming PySpark notebook to a modula
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "numpy>=2.2.6",
+    "pyspark>=3,<4",
+]
+
+[dependency-groups]
+dev = [
     "ipykernel>=6.30.1",
     "jupyter>=1.1.1",
-    "pandas>=2.3.2",
-    "pyspark>=3,<4",
     "findspark>=2.0.1",
+    "pytest>=9.0.2",
 ]
 
 [tool.ruff]

@@ -17,6 +17,33 @@ init: install
 clean:
 	rm -rf $(VENV)
 
+# code quality checks
 qc:
 	ruff check --fix src/
 	ruff format src/
+
+# unit tests run
+test:
+	(\
+	.  $(VENV)/bin/activate;\
+	python -m pytest tests -vv -s;\
+	)
+
+# runs a single test file/function. Syntax: make test-one ARGS=tests/path_to_file.py::test_function_name
+test-one:
+	(\
+	.  $(VENV)/bin/activate;\
+	python -m pytest ${ARGS} -vv -s;\
+	)
+
+debug:
+	(\
+	.  $(VENV)/bin/activate;\
+	python -m pytest --pdb -vv -s; \
+	)
+
+debug-one:
+	(\
+	.  $(VENV)/bin/activate;\
+	python -m pytest --pdb ${ARGS} -vv -s; \
+	)

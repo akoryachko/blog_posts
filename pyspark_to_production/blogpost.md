@@ -19,12 +19,13 @@ I will break the logic down into functions and talk about tricks for making the 
 ## Example assignment
 Let's assume that we have the following artificial task at hand.
 We want to train a model that predicts a tip amount for New York taxi rides based on other information about the trip.
-We are interested in the first 3 evening rides only, want to cap the price at $50, and exclude rides to and from the airport.
-The model should be updated in a regular schedule with the new data at hand.
+We are interested in the first 3 evening rides only and want to exclude rides to and from the airport.
+The model should be updated on a regular basis with the new data at hand.
 We should have a way to check feature importance and evaluation metrics for each run.
 
 ## Notebook
-The full notebook with code can be found [here](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/notebooks/notebook.ipynb).
+The full notebook with code can be found [here](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/notebooks/prototype.ipynb).
+Check [`README.md`](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/README.md) to set up environment for running the notebook locally.
 
 ## Refactoring
 Once we made sure the notebook produces the result for a single run, it is time to make it pretty.
@@ -246,7 +247,7 @@ def train_test_split(sdf: DataFrame) -> tuple[DataFrame]:
     )
 ```
 
-Wrapping model training and evaluation code into functions is straightforward and can be found in the [refactored notebook](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/notebooks/notebook_refactored.ipynb).
+Wrapping model training and evaluation code into functions is straightforward and can be found in the [refactored notebook](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/notebooks/prototype_refactored.ipynb).
 After that, the executable code shrinks to the definition of parameters and an ETL like framework:
 ```python
 sdfs = extract()
@@ -349,9 +350,10 @@ Next, let's define the top abstraction level function that runs the whole script
 ```python
 class TipAmountModel():
     ...
-    def run(self):
+    def run(self) -> None:
         self.extract()
         self.transform()
+        self.train()
         self.validate()
         self.load()
 ```
@@ -392,10 +394,6 @@ Below is an extract showing that the general structure of the chapters followed 
 ```python
     def transform(self) -> None:
         logger.info("Preparing the data for training")
-        self.prepare_data()
-        ...
-    
-    def prepare_data(self) -> None:
         self.sdfs["prepared_data"] = (
             self.sdfs["taxi_trip_data"]
             .transform(self.filter_data)
@@ -440,12 +438,12 @@ One of the ways to do that is to add the corresponding path to the list of paths
 In our case something like that should work:
 ```python
 import sys
-sys.path.append('../src')
+sys.path.append('../..')
 ```
 
 Next step is importing the required classes from the module and creating the corresponding objects:
 ```python
-from tip_amount_model import TipAmountModelConfig, TipAmountModel
+from pyspark_to_production.src.tip_amount_model import TipAmountModelConfig, TipAmountModel
 config = TipAmountModelConfig()
 job = TipAmountModel(config)
 ```
@@ -468,7 +466,7 @@ Different stages can be rerun after modifying parameters directly.
 The training and validation stages can be rerun after reducing the test fraction as follows:
 ```python
 job.config.test_fraction = 0.01
-job.transform()
+job.train()
 job.validate()
 ```
 
@@ -519,7 +517,7 @@ job.train_model = types.MethodType(train_model, job)
 
 And run the required stages to see the results.
 ```python
-job.transform()
+job.train()
 job.validate()
 ```
 
@@ -559,15 +557,201 @@ The code creates fake data, makes sure that not all of the feature columns are p
 This way, something like an accidental column renaming in the function or in the `feature_cols` would make this code raise an assertion error.
 
 ### Stage 2. Function in a notebook cell
-Raw code in a cell will work but it has a number of disadvantages starting with the reuse of `job` variable created, and potentially modified along the way, and ending with custom fake data that has to be adjusted in every such function if the input data schema changes.
-We can refactor such a code in a function that independently creates all the variables and create a fake data generator that can be reused by other functions.
+Raw code in a cell will work but it has a number of disadvantages such as the reuse of the `job` variable created once and modified from test to test and custom fake data generation that has to be adjusted in every test function if the input data schema changes.
+We will refactor the test code in a function that independently creates all the variables and create a fake data generator that can be reused by other functions.
+The fake data generator would look something like the following:
+```python
+from pyspark.sql import Row
+from datetime import datetime
+from typing import TypeVar, Type
+from dataclasses import dataclass, asdict
 
-Let's add a test function that makes sure all the features we have are numeric before passing the dataframe to the training stage that will definitely fail if that is not the case.
-We will start with a fake data generators for our datasets.
-The generators will generate a single data row that contains modifiable default values.
-This way only the values of interest can be created instead of the whole data.
+T = TypeVar("T")
+
+@dataclass
+class Trip:
+    vendor_id: int = 1
+    pickup_datetime: datetime = datetime(2018, 2, 4, 11, 0, 0)
+    dropoff_datetime: datetime = datetime(2018, 2, 4, 12, 30, 0)
+    passenger_count: int = 2
+    trip_distance: float = 50.2
+    rate_code: int = 3
+    store_and_fwd_flag: str = "N"
+    payment_type: int = 1
+    fare_amount: float = 10.5
+    extra: float = 0.1
+    mta_tax: float = 0.5
+    tip_amount: float = 0.8
+    tolls_amount: float = 0.1
+    imp_surcharge: float = 1.2
+    total_amount: float = 15.2
+    pickup_location_id: int = 1
+    dropoff_location_id: int = 2
+
+@dataclass
+class ZoneGeo:
+    zone_id: int = 1
+    zone_name: str = "Snack Zone"
+    borough: str = "Food Borough"
+
+def generate_rows(data_class: Type[T], data: list[tuple] = [()], columns: list[str] = []) -> list[Row]:
+    generated_rows = []
+    for record in data:
+        record_dict = dict(zip(columns, record))
+        record_class = data_class(**record_dict)
+        record_row = Row(**asdict(record_class))
+        generated_rows.append(record_row)
+    return generated_rows
+```
+
+Here we put together schemas for both datasets and a function that generates PySpark rows.
+The `generate_rows` function takes a dataset schema class, the values for the rows only for the columns that we want to modify, and the names of such columns.
+Values for the columns that we pass will be accompanied with the defaults from the schema definitions in the returned rows.
+
+The test function will then look like the follows:
+```python
+from datetime import datetime
+
+def is_subset(a: list, b: list) -> bool:
+    return set(a) <= set(b)
+
+def test_add_features_column_names() -> None:
+
+    tip_model = TipAmountModel(TipAmountModelConfig())
+
+    columns=["pickup_datetime", "store_and_fwd_flag"]
+    data = [
+        (datetime(2021, 1, 1, 12, 0, 0), "Y"),
+        (datetime(2021, 6, 15, 9, 30, 0), "N")
+    ]
+
+    tip_model.sdfs["taxi_trip_data"] = tip_model.spark.createDataFrame(generate_rows(Trip, data, columns))
+    tip_model.sdfs["taxi_zone_geo"] = tip_model.spark.createDataFrame(generate_rows(ZoneGeo))
+
+    assert not is_subset(tip_model.feature_cols, tip_model.sdfs["taxi_trip_data"].columns)
+
+    tip_model.transform()
+    assert is_subset(tip_model.feature_cols, tip_model.sdfs["prepared_data"].columns)
+```
+
+Here we test the functionality on a wider scope of the `transform` function.
+That is why we faked the `taxi_zone_geo` dataset as well with a single row of default values.
+First, we check that the features cols are not a part of the input data.
+Then, we make sure that all of them appear after running the `transform` function.
+
+The fake data generation boilerplate can not be justified by the use in a single test function.
+Let's add another test function that makes sure that the airports keep being excluded.
+The following function should do the trick:
+```python
+def test_exclude_airports_by_location() -> None:
+    columns=["pickup_location_id", "dropoff_location_id"]
+    data = [
+        (1, 1),
+        (100, 1),
+        (1, 100),
+        (100, 100),
+    ]
+
+    tip_model = TipAmountModel(TipAmountModelConfig())
+
+    # no airports
+    tip_model.sdfs["taxi_trip_data"] = tip_model.spark.createDataFrame(generate_rows(Trip, data, columns))
+    tip_model.sdfs["taxi_zone_geo"] = tip_model.spark.createDataFrame(
+        generate_rows(ZoneGeo, [(100, "terrestrial", ), ["zone_id", "zone_name"]])
+    )
+
+    tip_model.transform()
+    assert tip_model.sdfs["prepared_data"].count() == 3
+
+    # all except one have airports
+    tip_model.sdfs["taxi_zone_geo"] = tip_model.spark.createDataFrame(
+        generate_rows(ZoneGeo, [(100, "is airport or so", )], ["zone_id", "zone_name"])
+    )
+
+    tip_model.transform()
+    assert tip_model.sdfs["prepared_data"].count() == 0
+```
+
+All this test code can be found and run in [the test notebook](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/notebooks/test.ipynb).
+
+### Stage 3. Testing modules
+Code tests in a notebook is much better than no tests at all.
+The approach can work for small and not likely to be modified projects but it will not scale.
+Large active production facing projects have to have unit testing automated.
+The solution should:
+- run all of the tests.
+This gives the full picture of what is working and what is not.
+Running in a notebook will fail at the first test that did not pass.
+- run tests fast.
+Time for restarting and rerunning the notebook after each code change can accumulate during the complex debugging sessions.
+- have a minimal setup.
+Testing should not depend on a person running them locally.
+Testing should be a part of an automated pipeline that executes before the changes are merged to the production branch.
+Notebook creation overhead and the output analysis create an unnecessary complexity for the pipeline setup.
+
+I used the pytest library to put together and run the testing modules, but the unittest library can do the trick as well.
+First, let's put the test functions from the notebook to the module `test_tip_amount_model.py` in the `tests/unittests` folder of the project.
+Creating a spark context for every test seems like a waste of resources, so let's create it once for all the tests.
+This can be done by adding global settings to the `conftest.py` module:
+```python
+from collections.abc import Generator
+
+import pytest
+from pyspark.sql import SparkSession
+
+
+@pytest.fixture(scope="session")
+def spark() -> Generator:
+    spark: SparkSession = SparkSession.builder.master("local[*]").appName("testing").getOrCreate()
+    yield spark
+    spark.sparkContext.stop()
+```
+
+Here, the pytest decorator with the scope `session` will make sure to create and keep the spark variable around when running all the tests.
+More about different scopes can be found [here](https://docs.pytest.org/en/6.2.x/fixture.html).
+Another benefit of this fixture is that we can use spark directly instead of pulling it from a class instance.
+This will change the test function definition as follows:
+```python
+def test_add_features_column_names(spark) -> None:
+    ...
+    tip_model.sdfs["taxi_trip_data"] = spark.createDataFrame(generate_rows(Trip, data, columns))
+    ...
+```
+
+Another benefit of using pytest is that we can run the same test with different parameters as different tests.
+This would tell us which set of parameters broke the test instead of showing a general failure.
+The effect can be achieved with another fixture as follows:
+```python
+@pytest.mark.parametrize(
+    "pickup_location_id,dropoff_location_id,n_expected_rows",
+    [
+        (1, 1, 1),
+        (100, 1, 0),
+        (1, 100, 0),
+        (100, 100, 0),
+    ],
+)
+def test_exclude_airports_by_location(spark, pickup_location_id, dropoff_location_id, n_expected_rows) -> None:
+    columns=["pickup_location_id", "dropoff_location_id"]
+    data = [(pickup_location_id, dropoff_location_id), ]
+    ...
+    tip_model.transform()
+    assert tip_model.sdfs["prepared_data"].count() == n_expected_rows
+```
+
+Here we test each combination of pickup and dropoff location separately and also passing how many rows we expect after the filtering.
+
+One last step before running the tests is putting `__init__.py` files to the top level and test folders, so that test modules can find the package modules.
+Then run the test by typing something like `python -m pytest` in the terminal.
+Optionally, append `-vv` option to see the names of the testing functions and/or `-s` option to see the prints/logs.
+
+Once everything is up and running, test functions covering the rest of the functionality should be added to extend the tested code coverage.
+
 
 <!-- 
+
+
+
 Even the code creators forget what they meant with certain lines of code and have to rewrite things from scratch once requirements change.
 Moreover, the same pieces of code keep being rewritten over and over causing longer development cycles and higher chances of errors.
 I will use the standard output handler for the logger just to show that it can be used for printing things to the console.
