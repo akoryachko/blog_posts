@@ -41,7 +41,7 @@ feature_cols = [
 class TipAmountModel:
     def __init__(self, config: TipAmountModelConfig) -> None:
         self.config = config
-        self.spark = SparkSession.builder.getOrCreate()
+        self.spark = SparkSession.builder.config("spark.driver.bindAddress", "127.0.0.1").config("spark.driver.host", "127.0.0.1").getOrCreate()
         self.sdfs = {}
         self.model = None
         self.feature_cols = feature_cols
@@ -70,13 +70,6 @@ class TipAmountModel:
 
     def transform(self) -> None:
         logger.info("Preparing the data for training")
-        self.prepare_data()
-        self.train_test_split()
-
-        logger.info("Training the model")
-        self.train_model()
-
-    def prepare_data(self) -> None:
         self.sdfs["prepared_data"] = (
             self.sdfs["taxi_trip_data"]
             .transform(self.filter_data)
@@ -117,16 +110,16 @@ class TipAmountModel:
         self, sdf: DataFrame, location_id_col_name: str
     ) -> DataFrame:
         # fmt: off
-        sdf_zone_geo_no_airport = (
+        sdf_zone_geo_airport = (
             self.sdfs["taxi_zone_geo"]
-            .filter(~F.lower(F.col("zone_name")).like("%airport%"))
+            .filter(F.lower(F.col("zone_name")).like("%airport%"))
         )
         return (
             sdf
             .join(
-                sdf_zone_geo_no_airport,
+                sdf_zone_geo_airport,
                 on=[F.col(location_id_col_name) == F.col("zone_id")],
-                how="leftsemi"
+                how="leftanti"
             )
         )
         # fmt: on
@@ -167,6 +160,11 @@ class TipAmountModel:
             )
         )
         # fmt: on
+    
+    def train(self) -> None:
+        self.train_test_split()
+        logger.info("Training the model")
+        self.train_model()
 
     def train_test_split(self) -> None:
         # fmt: off
