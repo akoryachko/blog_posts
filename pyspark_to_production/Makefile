@@ -21,6 +21,7 @@ clean:
 qc:
 	ruff check --fix src/
 	ruff format src/
+	ruff check --fix tests/
 
 # unit tests run
 test:

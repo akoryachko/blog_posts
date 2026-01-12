@@ -562,7 +562,7 @@ We will refactor the test code in a function that independently creates all the 
 The fake data generator would look something like the following:
 ```python
 from pyspark.sql import Row
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TypeVar, Type
 from dataclasses import dataclass, asdict
 
@@ -571,8 +571,8 @@ T = TypeVar("T")
 @dataclass
 class Trip:
     vendor_id: int = 1
-    pickup_datetime: datetime = datetime(2018, 2, 4, 11, 0, 0)
-    dropoff_datetime: datetime = datetime(2018, 2, 4, 12, 30, 0)
+    pickup_datetime: datetime = datetime(2018, 2, 4, 18, 0, 0, tzinfo=timezone.utc)
+    dropoff_datetime: datetime = datetime(2018, 2, 4, 19, 30, 0, tzinfo=timezone.utc)
     passenger_count: int = 2
     trip_distance: float = 50.2
     rate_code: int = 3
@@ -621,8 +621,8 @@ def test_add_features_column_names() -> None:
 
     columns=["pickup_datetime", "store_and_fwd_flag"]
     data = [
-        (datetime(2021, 1, 1, 12, 0, 0), "Y"),
-        (datetime(2021, 6, 15, 9, 30, 0), "N")
+        (datetime(2021, 1, 1, 12, 0, 0, tzinfo=timezone.utc), "Y"),
+        (datetime(2021, 6, 15, 9, 30, 0, tzinfo=timezone.utc), "N"),
     ]
 
     tip_model.sdfs["taxi_trip_data"] = tip_model.spark.createDataFrame(generate_rows(Trip, data, columns))
@@ -723,7 +723,7 @@ This would tell us which set of parameters broke the test instead of showing a g
 The effect can be achieved with another fixture as follows:
 ```python
 @pytest.mark.parametrize(
-    "pickup_location_id,dropoff_location_id,n_expected_rows",
+    ("pickup_location_id", "dropoff_location_id", "n_expected_rows"),
     [
         (1, 1, 1),
         (100, 1, 0),

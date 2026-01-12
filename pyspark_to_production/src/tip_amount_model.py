@@ -6,7 +6,6 @@ from pyspark.ml.evaluation import RegressionEvaluator
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.regression import RandomForestRegressor
 from pyspark.sql import DataFrame, SparkSession, Window
-
 from pyspark_to_production.src.log_config import get_logger
 
 logger = get_logger(__name__)
@@ -59,7 +58,7 @@ class TipAmountModel:
             "taxi_zone_geo",
         ]
         for dataset_name in dataset_names:
-            logger.info(f"  {dataset_name}...")
+            logger.info("  {%s}...", dataset_name)
             self.read_dataset(dataset_name)
 
     def read_dataset(self, dataset_name: str) -> None:
@@ -160,7 +159,7 @@ class TipAmountModel:
             )
         )
         # fmt: on
-    
+
     def train(self) -> None:
         self.train_test_split()
         logger.info("Training the model")

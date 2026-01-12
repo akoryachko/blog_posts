@@ -5,7 +5,7 @@ def get_logger(name: str) -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)  # lowest level to capture by the logger
 
-    logger.handlers.clear() # remove existing handlers to not accidentally duplicate them
+    logger.handlers.clear()  # remove existing handlers to not accidentally duplicate them
     # handler for printing messages to console
     # a file handler will replace this in prod
     sh = logging.StreamHandler()
