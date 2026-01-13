@@ -8,7 +8,7 @@ init: install
 	uv tool install ruff
 	uv sync
 # adding a kernel to use in Jupyter notebook
-# needs a restart of VSCode to become visible
+# needs a restart of VSCode and local environment activation to become visible
 	(\
 	.  $(VENV)/bin/activate;\
 	ipython kernel install --user --name=$(PROJECT_NAME);\
@@ -19,9 +19,8 @@ clean:
 
 # code quality checks
 qc:
-	ruff check --fix src/
-	ruff format src/
-	ruff check --fix tests/
+	ruff check --fix
+	ruff format
 
 # unit tests run
 test:

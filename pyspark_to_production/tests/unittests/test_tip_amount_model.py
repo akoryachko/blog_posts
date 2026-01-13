@@ -12,6 +12,7 @@ from pyspark_to_production.src.tip_amount_model import (
 
 CT = TypeVar("CT")
 
+
 @dataclass
 class Trip:
     vendor_id: int = 1
@@ -32,13 +33,19 @@ class Trip:
     pickup_location_id: int = 1
     dropoff_location_id: int = 2
 
+
 @dataclass
 class ZoneGeo:
     zone_id: int = 1
     zone_name: str = "Snack Zone"
     borough: str = "Food Borough"
 
-def generate_rows(data_class: type[CT], data: list[tuple]|None = None, columns: list[str]|None = None) -> list[Row]:
+
+def generate_rows(
+    data_class: type[CT],
+    data: list[tuple] | None = None,
+    columns: list[str] | None = None,
+) -> list[Row]:
     data = data or [()]
     columns = columns or []
 
@@ -50,12 +57,13 @@ def generate_rows(data_class: type[CT], data: list[tuple]|None = None, columns: 
         generated_rows.append(record_row)
     return generated_rows
 
+
 def is_subset(a: list, b: list) -> bool:
     return set(a) <= set(b)
 
 
 def test_add_features_column_names(spark: SparkSession) -> None:
-    columns=["pickup_datetime", "store_and_fwd_flag"]
+    columns = ["pickup_datetime", "store_and_fwd_flag"]
     data = [
         (datetime(2021, 1, 1, 12, 0, 0, tzinfo=timezone.utc), "Y"),
         (datetime(2021, 6, 15, 9, 30, 0, tzinfo=timezone.utc), "N"),
@@ -63,10 +71,14 @@ def test_add_features_column_names(spark: SparkSession) -> None:
 
     tip_model = TipAmountModel(TipAmountModelConfig())
 
-    tip_model.sdfs["taxi_trip_data"] = spark.createDataFrame(generate_rows(Trip, data, columns))
+    tip_model.sdfs["taxi_trip_data"] = spark.createDataFrame(
+        generate_rows(Trip, data, columns)
+    )
     tip_model.sdfs["taxi_zone_geo"] = spark.createDataFrame(generate_rows(ZoneGeo))
 
-    assert not is_subset(tip_model.feature_cols, tip_model.sdfs["taxi_trip_data"].columns)
+    assert not is_subset(
+        tip_model.feature_cols, tip_model.sdfs["taxi_trip_data"].columns
+    )
 
     tip_model.transform()
     assert is_subset(tip_model.feature_cols, tip_model.sdfs["prepared_data"].columns)
@@ -81,9 +93,14 @@ def test_add_features_column_names(spark: SparkSession) -> None:
         (100, 100, 0),
     ],
 )
-def test_exclude_airports_by_location(spark: SparkSession, pickup_location_id: int, dropoff_location_id: int, n_expected_rows: int) -> None:
-    columns=["pickup_location_id", "dropoff_location_id"]
-    data = [(pickup_location_id, dropoff_location_id) ]
+def test_exclude_airports_by_location(
+    spark: SparkSession,
+    pickup_location_id: int,
+    dropoff_location_id: int,
+    n_expected_rows: int,
+) -> None:
+    columns = ["pickup_location_id", "dropoff_location_id"]
+    data = [(pickup_location_id, dropoff_location_id)]
 
     tip_model = TipAmountModel(TipAmountModelConfig())
 
@@ -92,7 +109,7 @@ def test_exclude_airports_by_location(spark: SparkSession, pickup_location_id: i
         generate_rows(Trip, data, columns)
     )
     tip_model.sdfs["taxi_zone_geo"] = spark.createDataFrame(
-        generate_rows(ZoneGeo, [(100, "terrestrial" )], ["zone_id", "zone_name"])
+        generate_rows(ZoneGeo, [(100, "terrestrial")], ["zone_id", "zone_name"])
     )
 
     tip_model.transform()
@@ -100,7 +117,7 @@ def test_exclude_airports_by_location(spark: SparkSession, pickup_location_id: i
 
     # all except one have airports
     tip_model.sdfs["taxi_zone_geo"] = tip_model.spark.createDataFrame(
-        generate_rows(ZoneGeo, [(100, "is airport or so" )], ["zone_id", "zone_name"])
+        generate_rows(ZoneGeo, [(100, "is airport or so")], ["zone_id", "zone_name"])
     )
 
     tip_model.transform()
