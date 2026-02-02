@@ -3,19 +3,19 @@
 ## Motivation
 
 The gap between a working notebook and maintainable production code is significant, especially in teams where people specialize in different parts of the project lifecycle.
-Situations where data scientists throw a proof‑of‑concept notebook over the fence to engineers are common. Engineers then take the logic as‑is, wrap it into a scheduled job, and move on.
+Situations where data scientists throw a proof-of-concept notebook over the fence to engineers are common. Engineers then take the logic as-is, wrap it into a scheduled job, and move on.
 This approach often results in solutions that are hard to understand, modify, and maintain.
-The problem is amplified in big‑data applications: data scientists may lack production‑grade coding experience, while engineers may not feel confident untangling long, monolithic PySpark queries.
+The problem is amplified in big-data applications: data scientists may lack production-grade coding experience, while engineers may not feel confident untangling long, monolithic PySpark queries.
 
 ## Purpose
-This post focuses on practical techniques for bridging the gap between a free‑form PySpark notebook and modular, production‑ready code.
+This post focuses on practical techniques for bridging the gap between a free-form PySpark notebook and modular, production-ready code.
 The goal is twofold:
 - Help data scientists write code that is more readable and reusable.
 - Give engineers confidence to reshape PySpark logic so that it aligns with standard software engineering practices.
 
 ## Who this post is for
 - Data scientists whose PySpark notebooks eventually need to run in production.
-- Data engineers inheriting notebook‑based logic.
+- Data engineers inheriting notebook-based logic.
 - Teams struggling with unclear ownership between experimentation and implementation.
 
 ## Approach
@@ -25,7 +25,8 @@ Even the author will have issues untangling the logic after some time at another
 
 We will progressively refactor this notebook, breaking the logic into functions, modules, and tests.
 Each stage represents a different level of maintainability.
-You can stop at any stage once your project’s requirements are satisfied. Projects have very different needs: from a one‑off analysis with no maintenance requirements to a business‑critical system with strict SLAs.
+You can stop at any stage once your project's requirements are satisfied.
+Projects have very different needs: from a one-off analysis with no maintenance requirements to a business-critical system with strict SLAs.
 The stages below intentionally scale from minimal to rigorous.
 
 ## Example project
@@ -38,14 +39,18 @@ We want to train a model that predicts the tip amount for New York City taxi rid
 - Retrain the model regularly.
 
 ## Stage 0. Notebook solution
-*Suitable only for one‑time analysis or proof‑of‑concept work.*
+*Suitable only for one-time analysis or proof-of-concept work.*
 
-The full prototype notebook can be found [here](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/notebooks/prototype.ipynb). Set up instructions for running the notebook locally are in the [`README.md`](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/README.md) of the same repo.
+The full prototype notebook for the project can be found [here](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/notebooks/prototype.ipynb). Set up instructions for running the notebook locally are in the [`README.md`](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/README.md) of the same repo.
 
-At this stage, correctness matters more than structure. The notebook produces the desired output and maintainability is not yet a concern.
+At this stage, correctness matters more than structure.
+The notebook produces the desired output, and maintainability is not yet a concern.
+Getting the desired output once does not guarantee successful runs in the future.
+Debugging will be challenging as well.
+Hence, extra work is required to extend the application scope.
 
 ## Stage 1. Refactored notebook
-*Suitable for code that needs to be rerun occasionally.*
+*Suitable for non-critical code that needs to be rerun occasionally.*
 
 Once the notebook produces correct results for a single run, it is time to make it readable and easier to reason about.
 The main goals are:
@@ -223,7 +228,7 @@ def transform() -> None:
     )
 ```
 
-At this point, the executable logic shrinks to an ETL‑like skeleton:
+At this point, the executable logic shrinks to an ETL-like skeleton:
 ```python
 sdfs = extract()
 transform()
@@ -251,7 +256,7 @@ logger = logging.getLogger("tip_amount_model_logger")
 logger.setLevel(logging.DEBUG) # lowest level to capture by the logger
 
 logger.handlers.clear() # remove existing handlers to not accidentally duplicate them
-sh = logging.StreamHandler() # handler for printing messages to console. Will need file handler in prod
+sh = logging.StreamHandler() # handler for printing messages to console. Will need a file handler in prod
 
 sh.setLevel(logging.INFO) # lowest level for the handler to display
 f = logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s", "%Y-%m-%d %H:%M")
@@ -267,12 +272,12 @@ Notebook with the refactored code can be found [here](https://github.com/akoryac
 *Suitable for code maintained by more than one person.*
 
 Notebooks are convenient for exploration but awkward for collaboration and version control.
-Reading flow is inverted (low‑level functions first) and merge request diffs are noisy.
+Reading flow is inverted (low-level functions first) and merge request diffs are noisy.
 
 Moving code into Python modules improves readability, collaboration, and testability.
 I added the functionality to `.py` files in the `src` directory of [the repo](https://github.com/akoryachko/blog_posts/tree/main/pyspark_to_production).
 
-### Step 2.1. Create the main module
+### Step 2.1. Main module
 Most logic lives in `tip_amount_model.py`.
 
 Shared parameters are grouped into a configuration dataclass:
@@ -307,7 +312,6 @@ Another class holds the logic and shared variables to enable the computations:
 class TipAmountModel():
     def __init__(self, config: TipAmountModelConfig) -> None:
         self.config = config
-        self.spark = SparkSession.builder.getOrCreate()
         self.sdfs = {}
         self.model = None
         self.feature_cols = feature_cols
@@ -325,7 +329,7 @@ class TipAmountModel():
         self.load()
 ```
 
-Lower‑level methods follow immediately after their callers, preserving top‑down readability:
+Lower-level methods follow immediately after their callers, preserving top-down readability:
 ```python
     def extract(self) -> None:
         logger.info("Extracting datasets")
@@ -337,9 +341,10 @@ Lower‑level methods follow immediately after their callers, preserving top‑d
             self.read_dataset(dataset_name)
 
     def read_dataset(self, dataset_name: str) -> None:
-        file_path = f"../data/{dataset_name}.csv"
+        path_here = Path(__file__).resolve()
+        file_path = path_here.parent.parent / "data" / f"{dataset_name}.csv"
         self.sdfs[dataset_name] = self.spark.read.csv(
-            file_path, header=True, inferSchema=True
+            str(file_path), header=True, inferSchema=True
         )
 
     def transform(self) -> None:
@@ -366,8 +371,58 @@ Lower‑level methods follow immediately after their callers, preserving top‑d
         ...
 ```
 
+### Step 2.2. Script with parameters
+Running the job from the command line with parameters makes it easy to iterate on experiments in an automated and reproducible way.
+This requires a few small additions that allow the module to be executed as a script, for example:
+```bash
+python -m pyspark_to_production.src.tip_amount_model \
+  --n-first-daily-rides-to-keep 5 \
+  --test-fraction 0.01
+```
 
-### Step 2.2. Supporting modules
+#### 2.2.1. Add parameter parser
+The function below creates command-line arguments for all fields defined in the configuration dataclass:
+```python
+import argparse
+def dataclass_to_argparser(cls) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+
+    for f in fields(cls):
+        parser.add_argument(
+            f"--{f.name.replace('_', '-')}",
+            default=f.default,
+            type=f.type,
+        )
+
+    return parser
+```
+This approach ensures that:
+- all configuration parameters are exposed automatically,
+- defaults remain defined in a single place (the dataclass),
+- adding a new configuration option requires no changes to the argument-parsing logic.
+
+#### 2.2.2. Add a `main` entry point
+The `__main__` block allows the tip_amount_model.py module to be executed directly, with parameters passed from the command line:
+```python
+if __name__ == "__main__":
+
+    parser = dataclass_to_argparser(TipAmountModelConfig)
+    args = parser.parse_args()
+
+    config = TipAmountModelConfig(**vars(args))
+    job = TipAmountModel(config)
+    job.run()
+```
+
+#### 2.2.3. Add module markers
+To allow Python to resolve imports correctly when running the script from outside the project directory, add empty `__init__.py` files to:
+- the project root,
+- the src directory.
+
+This marks both directories as Python packages and enables execution via `python -m ...` instead of relying on relative paths or manual `PYTHONPATH` manipulation.
+
+
+### Step 2.3. Supporting modules
 Reusable infrastructure such as logging deserves [its own module](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/src/log_config.py).
 A shared logging setup ensures consistent conventions across jobs by calling:
 ```python
@@ -378,10 +433,10 @@ logger = get_logger(__name__)
 Any function used across jobs should follow the logging module suite and be imported as opposed to defined within a job module.
 One caveat with independent functions is that all parameters for such a function should be passed instead of being available through `self`.
 
-### Step 2.3. Notebook interaction
+### Step 2.4. Notebook interaction
 Even with production code in modules, notebooks remain useful for debugging and experimentation.
 
-#### 2.3.1. Debugging
+#### 2.4.1. Debugging
 Debugging module-based code from a notebook is primarily about **shortening the feedback loop** between code changes and observed behavior.
 
 The typical debugging workflow consists of three steps:
@@ -391,12 +446,12 @@ The typical debugging workflow consists of three steps:
 
 **Make modules available for import**  
 Because the notebook lives outside the src directory, Python does not automatically know where to find the project modules.
-One simple way to fix this in a notebook is to add the project root to Python’s import path:
+One simple way to fix this in a notebook is to add the project root to Python's import path:
 ```python
 import sys
 sys.path.append('../..')
 ```
-Here we add the `blog_posts directory` (two levels above `notebooks`) to Python’s module search path, making `pyspark_to_production` importable.
+Here we add the `blog_posts` directory (two levels above `notebooks`) to Python's module search path, making `pyspark_to_production` importable.
 
 **Create job objects**  
 Next, import the main classes and create the configuration and job instances:
@@ -437,7 +492,7 @@ Jupyter can automatically reload modified modules before each execution by using
 %autoreload 2
 ```
 
-#### 2.3.2 Experimentation
+#### 2.4.2. Experimentation
 One of the main advantages of interacting with the job through a notebook is the ability to experiment quickly while still using production-ready code.
 Experimentation typically falls into two categories: parameter tuning and prototyping new logic.
 
@@ -454,9 +509,9 @@ job.validate()
 Because the pipeline stages are independent, only the affected parts need to be rerun.
 This makes parameter tuning fast and encourages systematic experimentation.
 
-**Prototyping new logic**
+**Local prototyping**
 Some experiments go beyond parameter changes and require trying out new ideas that are not yet part of the production code.
-For example, you may want to evaluate a different model architecture or feature-processing strategy.
+For example, you may want to quickly try out a different model or a feature-processing tweak.
 In such cases, the goal is to prototype **without modifying the repository**, keeping experiments local to the notebook.
 
 Suppose we want to try a Gradient-Boosted Tree regressor instead of the default model.
@@ -499,20 +554,20 @@ job.validate()
 ```
 
 This approach allows rapid exploration of alternative implementations while preserving a clean separation between experimental code and the production codebase.
-Once an experiment proves valuable, the changes can be formalized and properly integrated into the module.
+However, if the experiment grows, becomes reproducible, or needs team review, a proper repository branch will be a better choice.
 
 All examples shown in this section are available in the [playground notebook](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/notebooks/playground.ipynb).
 
 
 ## Stage 3. Unit tests
-*Required for time‑critical or frequently changing systems.*
+*Required for time-critical or frequently changing systems.*
 
 Code changes introduce bugs far more often than we would like.
 The goal of unit testing is to catch those bugs before they reach production, reducing rollbacks, hot fixes, and firefighting.
 
 ### Step 3.1. Checks in a notebook cell
 The fastest way to start unit testing is to write simple behavioral checks directly in the module-interaction notebook from the previous stage.
-As an example, let’s verify that the `add_features()` function actually produces the feature columns listed in `feature_cols`:
+As an example, let's verify that the `add_features()` function actually produces the feature columns listed in `feature_cols`:
 ```python
 from datetime import datetime
 

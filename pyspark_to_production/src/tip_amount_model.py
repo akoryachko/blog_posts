@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 import pyspark.sql.functions as F
 from pyspark.ml import Pipeline
@@ -7,6 +7,8 @@ from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.regression import RandomForestRegressor
 from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark_to_production.src.log_config import get_logger
+import argparse
+from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -39,10 +41,27 @@ feature_cols = [
 class TipAmountModel:
     def __init__(self, config: TipAmountModelConfig) -> None:
         self.config = config
-        self.spark = SparkSession.builder.getOrCreate()
         self.sdfs = {}
         self.model = None
         self.feature_cols = feature_cols
+        self.log_inits()
+
+    def log_inits(self) -> None:
+        logger.info("Initialized with configs: %s", self.config)
+
+        spark_app_name = self.spark.sparkContext.getConf().get("spark.app.name")
+        logger.info("Spark app name: %s", spark_app_name)
+    
+    @property
+    def spark(self):
+        # takes the currently running spark session or creates a local one
+        return (
+            SparkSession.builder.master("local[*]")
+            .appName("local_run")
+            .config("spark.driver.bindAddress", "127.0.0.1")
+            .config("spark.driver.host", "127.0.0.1")
+            .getOrCreate()
+        )
 
     def run(self) -> None:
         self.extract()
@@ -58,13 +77,14 @@ class TipAmountModel:
             "taxi_zone_geo",
         ]
         for dataset_name in dataset_names:
-            logger.info("  {%s}...", dataset_name)
+            logger.info("  %s...", dataset_name)
             self.read_dataset(dataset_name)
 
     def read_dataset(self, dataset_name: str) -> None:
-        file_path = f"../data/{dataset_name}.csv"
+        path_here = Path(__file__).resolve()
+        file_path = path_here.parent.parent / "data" / f"{dataset_name}.csv"
         self.sdfs[dataset_name] = self.spark.read.csv(
-            file_path, header=True, inferSchema=True
+            str(file_path), header=True, inferSchema=True
         )
 
     def transform(self) -> None:
@@ -229,3 +249,24 @@ class TipAmountModel:
         logger.info("Saving the model")
         self.model.write().overwrite().save("../data/model")
         logger.info("The model is saved")
+
+
+def dataclass_to_argparser(cls) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+
+    for f in fields(cls):
+        parser.add_argument(
+            f"--{f.name.replace('_', '-')}",
+            default=f.default,
+            type=f.type,
+        )
+
+    return parser
+
+if __name__ == "__main__":
+
+    parser = dataclass_to_argparser(TipAmountModelConfig)
+    args = parser.parse_args()
+    config = TipAmountModelConfig(**vars(args))
+    job = TipAmountModel(config)
+    job.run()

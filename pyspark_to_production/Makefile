@@ -47,3 +47,12 @@ debug-one:
 	.  $(VENV)/bin/activate;\
 	python -m pytest --pdb ${ARGS} -vv -s; \
 	)
+
+# runs the tip amount model script with parameters in ARGS.
+# Syntax: make run ARGS="--n-first-daily-rides-to-keep 5 --test-fraction 0.01"
+run:
+	(\
+	.  $(VENV)/bin/activate;\
+	cd ..;\
+	python -m pyspark_to_production.src.tip_amount_model ${ARGS};\
+	)

@@ -5,6 +5,7 @@ description = "Repo for a blogpost for transforming PySpark notebook to a modula
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "argparse>=1.4.0",
     "numpy>=2.2.6",
     "pyspark>=3,<4",
 ]
