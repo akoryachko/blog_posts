@@ -1,4 +1,6 @@
+import argparse
 from dataclasses import dataclass, fields
+from pathlib import Path
 
 import pyspark.sql.functions as F
 from pyspark.ml import Pipeline
@@ -6,9 +8,8 @@ from pyspark.ml.evaluation import RegressionEvaluator
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.regression import RandomForestRegressor
 from pyspark.sql import DataFrame, SparkSession, Window
+
 from pyspark_to_production.src.log_config import get_logger
-import argparse
-from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -51,9 +52,9 @@ class TipAmountModel:
 
         spark_app_name = self.spark.sparkContext.getConf().get("spark.app.name")
         logger.info("Spark app name: %s", spark_app_name)
-    
+
     @property
-    def spark(self):
+    def spark(self) -> SparkSession:
         # takes the currently running spark session or creates a local one
         return (
             SparkSession.builder.master("local[*]")
@@ -251,7 +252,7 @@ class TipAmountModel:
         logger.info("The model is saved")
 
 
-def dataclass_to_argparser(cls) -> argparse.ArgumentParser:
+def dataclass_to_argparser(cls: type) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
 
     for f in fields(cls):
@@ -263,8 +264,8 @@ def dataclass_to_argparser(cls) -> argparse.ArgumentParser:
 
     return parser
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     parser = dataclass_to_argparser(TipAmountModelConfig)
     args = parser.parse_args()
     config = TipAmountModelConfig(**vars(args))

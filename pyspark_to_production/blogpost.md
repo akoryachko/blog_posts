@@ -383,6 +383,7 @@ python -m pyspark_to_production.src.tip_amount_model \
 #### 2.2.1. Add parameter parser
 The function below creates command-line arguments for all fields defined in the configuration dataclass:
 ```python
+from dataclasses import fields
 import argparse
 def dataclass_to_argparser(cls) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
