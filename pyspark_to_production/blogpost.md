@@ -292,19 +292,6 @@ class TipAmountModelConfig:
     last_evening_hour: str = "23"
     n_first_daily_rides_to_keep: int = 3
     test_fraction: float = 0.2
-    feature_cols: list[str] = [
-        "passenger_count",
-        "trip_distance",
-        "rate_code",
-        "store_and_fwd_flag",
-        "payment_type",
-        "fare_amount",
-        "tolls_amount",
-        "imp_surcharge",
-        "month",
-        "day_of_week",
-        "day_of_month",
-    ]
 ```
 
 Another class holds the logic and shared variables to enable the computations:
@@ -314,7 +301,7 @@ class TipAmountModel():
         self.config = config
         self.sdfs = {}
         self.model = None
-        self.feature_cols = feature_cols
+        ...
 ```
 
 A single `run()` method defines the table of contents for the job:
