@@ -10,10 +10,12 @@ The problem is amplified in big-data applications: data scientists may lack prod
 ## Purpose
 This post focuses on practical techniques for bridging the gap between a free-form PySpark notebook and modular, production-ready code.
 The goal is twofold:
+
 - Help data scientists write code that is more readable and reusable.
 - Give engineers confidence to reshape PySpark logic so that it aligns with standard software engineering practices.
 
 ## Who this post is for
+
 - Data scientists whose PySpark notebooks eventually need to run in production.
 - Data engineers inheriting notebook-based logic.
 - Teams struggling with unclear ownership between experimentation and implementation.
@@ -32,6 +34,7 @@ The stages below intentionally scale from minimal to rigorous.
 ## Example project
 Assume the following (artificial but realistic) task.
 We want to train a model that predicts the tip amount for New York City taxi rides based on trip information. The requirements are:
+
 - Use NYC taxi data (pickup/dropoff timestamps, locations, fares, etc.).
 - Keep only the first three evening rides per pickup location per day.
 - Exclude trips to or from airports.
@@ -54,6 +57,7 @@ Hence, extra work is required to extend the application scope.
 
 Once the notebook produces correct results for a single run, it is time to make it readable and easier to reason about.
 The main goals are:
+
 - Clear structure
 - Reduced duplication
 - Traceable execution
@@ -385,6 +389,7 @@ def dataclass_to_argparser(cls) -> argparse.ArgumentParser:
     return parser
 ```
 This approach ensures that:
+
 - all configuration parameters are exposed automatically,
 - defaults remain defined in a single place (the dataclass),
 - adding a new configuration option requires no changes to the argument-parsing logic.
@@ -404,6 +409,7 @@ if __name__ == "__main__":
 
 #### 2.2.3. Add module markers
 To allow Python to resolve imports correctly when running the script from outside the project directory, add empty `__init__.py` files to:
+
 - the project root,
 - the src directory.
 
@@ -428,6 +434,7 @@ Even with production code in modules, notebooks remain useful for debugging and 
 Debugging module-based code from a notebook is primarily about **shortening the feedback loop** between code changes and observed behavior.
 
 The typical debugging workflow consists of three steps:
+
 1. Make the project modules importable.
 1. Instantiate the job and run it.
 1. Inspect intermediate state and iterate.
@@ -449,6 +456,7 @@ config = TipAmountModelConfig()
 job = TipAmountModel(config)
 ```
 At this point:
+
 - All configuration parameters are accessible via `job.config`.
 - The Spark session and internal state live inside the `job` object.
 
@@ -471,9 +479,10 @@ job.sdfs["training"].show(5)
 
 **Iterate on fixes**  
 After fixing a bug in the module code, you have two options:
+
 1. **Restart the notebook.**
 This guarantees that all module changes are picked up, but it is slower.
-2. **Enable automatic reloading.**
+1. **Enable automatic reloading.**
 Jupyter can automatically reload modified modules before each execution by using magic commands:
 ```python
 %load_ext autoreload
@@ -579,6 +588,7 @@ assert is_subset(expected_columns, sdf_fake_features.columns)
 ```
 
 This test:
+
 - creates minimal fake input data,
 - verifies that feature columns are not present before transformation,
 - and confirms that they appear after `add_features()` is applied.
@@ -587,6 +597,7 @@ Even simple checks like this are effective at catching accidental column renames
 
 ### Step 3.2. Function in a notebook cell
 While inline notebook checks work, they quickly become problematic:
+
 - they reuse shared state (job) across tests,
 - fake data generation is duplicated,
 - schema changes require editing multiple cells.
@@ -680,7 +691,6 @@ def test_add_features_column_names() -> None:
 This test verifies behavior at the level of the `transform()` stage, which is why we also provide a minimal fake `taxi_zone_geo` dataset.
 
 **Additional tests**  
-
 The data-generation boilerplate becomes worthwhile once multiple tests reuse it.
 For example, we can validate that airport trips continue to be excluded:
 ```python
@@ -731,6 +741,7 @@ Notebook-based tests are far better than having no tests at all.
 They work well for small projects or exploratory code, but they do not scale to large, actively developed, production-facing systems.
 
 As the codebase grows, testing must be automated. A scalable testing setup should:
+
 - **Run the full test suite.**
 This provides a complete picture of what works and what breaks.
 Notebook execution stops at the first failing assertion, hiding downstream failures.
@@ -820,7 +831,6 @@ Optional flags:
 - `-s` to show print statements and logs.
 
 **Closing the loop**
-
 Once the test infrastructure is in place, additional test functions should be added to cover the rest of the pipeline logic.
 Tests should be updated alongside code changes and run automatically as part of the development workflow.
 
@@ -829,6 +839,7 @@ Notebooks are an excellent medium for exploration, but they are a poor long-term
 The problem is not the use of notebooks themselves, it is the lack of a clear path from experimentation to maintainable code.
 
 In this post, we walked through that path step by step:
+
 - Starting from a working but monolithic PySpark notebook,
 - Refactoring logic into readable, composable functions,
 - Moving code into modules with clear ownership and structure,
