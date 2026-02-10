@@ -8,6 +8,7 @@ This approach often results in solutions that are hard to understand, modify, an
 The problem is amplified in big-data applications: data scientists may lack production-grade coding experience, while engineers may not feel confident untangling long, monolithic PySpark queries.
 
 ## Purpose
+
 This post focuses on practical techniques for bridging the gap between a free-form PySpark notebook and modular, production-ready code.
 The goal is twofold:
 
@@ -21,6 +22,7 @@ The goal is twofold:
 - Teams struggling with unclear ownership between experimentation and implementation.
 
 ## Approach
+
 We will walk through an example notebook that trains a model to predict taxi ride tip amounts.
 The notebook works, but most of the logic lives in a single long PySpark query that might be difficult to understand.
 Even the author will have issues untangling the logic after some time at another project.
@@ -32,6 +34,7 @@ Projects have very different needs: from a one-off analysis with no maintenance 
 The stages below intentionally scale from minimal to rigorous.
 
 ## Example project
+
 Assume the following (artificial but realistic) task.
 We want to train a model that predicts the tip amount for New York City taxi rides based on trip information. The requirements are:
 
@@ -42,6 +45,7 @@ We want to train a model that predicts the tip amount for New York City taxi rid
 - Retrain the model regularly.
 
 ## Stage 0. Notebook solution
+
 *Suitable only for one-time analysis or proof-of-concept work.*
 
 The full prototype notebook for the project can be found [here](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/notebooks/prototype.ipynb). Set up instructions for running the notebook locally are in the [`README.md`](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/README.md) of the same repo.
@@ -53,6 +57,7 @@ Debugging will be challenging as well.
 Hence, extra work is required to extend the application scope.
 
 ## Stage 1. Refactored notebook
+
 *Suitable for non-critical code that needs to be rerun occasionally.*
 
 Once the notebook produces correct results for a single run, it is time to make it readable and easier to reason about.
@@ -273,6 +278,7 @@ logger.info("Tip amount model logger is initialized!")
 Notebook with the refactored code can be found [here](https://github.com/akoryachko/blog_posts/blob/main/pyspark_to_production/notebooks/prototype_refactored.ipynb).
 
 ## Stage 2. Code in modules
+
 *Suitable for code maintained by more than one person.*
 
 Notebooks are convenient for exploration but awkward for collaboration and version control.
@@ -493,7 +499,7 @@ Jupyter can automatically reload modified modules before each execution by using
 One of the main advantages of interacting with the job through a notebook is the ability to experiment quickly while still using production-ready code.
 Experimentation typically falls into two categories: parameter tuning and prototyping new logic.
 
-**Parameter-level experimentation**
+**Parameter-level experimentation**  
 Many experiments can be performed by simply modifying configuration values and rerunning the relevant stages.
 This is the safest and fastest way to explore model behavior, as it requires no code changes.
 
@@ -506,7 +512,7 @@ job.validate()
 Because the pipeline stages are independent, only the affected parts need to be rerun.
 This makes parameter tuning fast and encourages systematic experimentation.
 
-**Local prototyping**
+**Local prototyping**  
 Some experiments go beyond parameter changes and require trying out new ideas that are not yet part of the production code.
 For example, you may want to quickly try out a different model or a feature-processing tweak.
 In such cases, the goal is to prototype **without modifying the repository**, keeping experiments local to the notebook.
@@ -557,6 +563,7 @@ All examples shown in this section are available in the [playground notebook](ht
 
 
 ## Stage 3. Unit tests
+
 *Required for time-critical or frequently changing systems.*
 
 Code changes introduce bugs far more often than we would like.
@@ -790,7 +797,7 @@ def test_add_features_column_names(spark: SparkSession) -> None:
     ...
 ```
 
-**Parameterizing tests** 
+**Parameterizing tests**  
 `pytest` also allows running the same test logic with multiple input combinations.
 This is especially useful for validating edge cases and understanding exactly which inputs cause failures.
 For example, airport filtering can be tested as follows:
@@ -819,7 +826,7 @@ def test_exclude_airports_by_location(
 
 Here we test each combination of pickup and dropoff locations separately and also passing how many rows we expect after the filtering.
 
-**Running the test suite**
+**Running the test suite**  
 Before running the tests, ensure that `__init__.py` files are present in both the project root and test directories so that Python can correctly resolve imports.
 
 Tests can then be executed from the project root with:
@@ -830,11 +837,12 @@ Optional flags:
 - `-vv` to display test names;
 - `-s` to show print statements and logs.
 
-**Closing the loop**
+**Closing the loop**  
 Once the test infrastructure is in place, additional test functions should be added to cover the rest of the pipeline logic.
 Tests should be updated alongside code changes and run automatically as part of the development workflow.
 
 ## Conclusion
+
 Notebooks are an excellent medium for exploration, but they are a poor long-term container for production logic.
 The problem is not the use of notebooks themselves, it is the lack of a clear path from experimentation to maintainable code.
 
