@@ -3,9 +3,16 @@
 ## Motivation
 
 The gap between a working notebook and maintainable production code is significant, especially in teams where people specialize in different parts of the project lifecycle.
-Situations where data scientists throw a proof-of-concept notebook over the fence to engineers are common. Engineers then take the logic as-is, wrap it into a scheduled job, and move on.
+Situations where data scientists throw a proof-of-concept notebook over the fence to engineers are common.
+Engineers then take the logic as-is, wrap it into a scheduled job, and move on.
 This approach often results in solutions that are hard to understand, modify, and maintain.
-The problem is amplified in big-data applications: data scientists may lack production-grade coding experience, while engineers may not feel confident untangling long, monolithic PySpark queries.
+The problem is amplified in big-data applications.
+Data scientists may lack production-grade coding experience, while engineers may not feel confident untangling long, monolithic PySpark queries.
+
+Large language models can help restructure notebook code, but mostly at a syntactic level.
+They can extract functions or reorganize modules, yet they do not capture the original intent or implicit assumptions behind the transformations.
+As a result, ownership becomes blurred and debugging more difficult, because the reshaped code no longer clearly belongs to either the data scientist or the engineer.
+
 
 ## Purpose
 
@@ -18,7 +25,7 @@ The goal is twofold:
 ## Who this post is for
 
 - Data scientists whose PySpark notebooks eventually need to run in production.
-- Data engineers inheriting notebook-based logic.
+- Data engineers who inherit notebook-based logic.
 - Teams struggling with unclear ownership between experimentation and implementation.
 
 ## Approach
@@ -36,7 +43,8 @@ The stages below intentionally scale from minimal to rigorous.
 ## Example project
 
 Assume the following (artificial but realistic) task.
-We want to train a model that predicts the tip amount for New York City taxi rides based on trip information. The requirements are:
+We want to train a model that predicts the tip amount for New York City taxi rides based on trip information.
+The requirements are:
 
 - Use NYC taxi data (pickup/dropoff timestamps, locations, fares, etc.).
 - Keep only the first three evening rides per pickup location per day.
@@ -68,7 +76,7 @@ The main goals are:
 - Traceable execution
 
 ### Step 1.1. Put code in functions
-#### Extracting dataset loading
+**Extracting dataset loading**  
 We start by removing duplication in dataset loading:
 ```python
 from pyspark.sql import DataFrame
@@ -88,7 +96,7 @@ sdfs = extract()
 ```
 Datasets now live in a single dictionary (`sdfs`), keyed by name, which simplifies downstream logic.
 
-#### Splitting the logic into functional pieces
+**Splitting the logic into functional pieces**  
 The core processing logic in the prototype notebook is implemented as a single chained PySpark query.
 ```python
 sdf_prepared_data = (
@@ -161,7 +169,7 @@ def limit_history_to_a_range(sdf: DataFrame) -> DataFrame:
 
 Parameters are kept outside functions to make them easy to override later (e.g., via runtime configuration).
 
-#### Chaining logic with `.transform()`
+**Chaining logic with `.transform()`**  
 Instead of creating a new dataframe variable for each step, we use `.transform()` (available in Spark 2.x+):
 ```python
 sdf_prepared_data = (
@@ -202,7 +210,7 @@ sdf_prepared_data = (
 )
 ```
 
-#### Grouping logic into abstraction levels
+**Grouping logic into abstraction levels**  
 Filtering and feature engineering form logical units in the transformation step of the code:
 ```python
 def filter_data(sdf: DataFrame) -> DataFrame:
@@ -515,7 +523,7 @@ This makes parameter tuning fast and encourages systematic experimentation.
 **Local prototyping**  
 Some experiments go beyond parameter changes and require trying out new ideas that are not yet part of the production code.
 For example, you may want to quickly try out a different model or a feature-processing tweak.
-In such cases, the goal is to prototype **without modifying the repository**, keeping experiments local to the notebook.
+In such cases, the goal is to prototype *without modifying the repository*, keeping experiments local to the notebook.
 
 Suppose we want to try a Gradient-Boosted Tree regressor instead of the default model.
 We can define a modified training function directly in a notebook cell:
