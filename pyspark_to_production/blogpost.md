@@ -11,7 +11,7 @@ Data scientists may lack production-grade coding experience, while engineers may
 
 Large language models can help restructure notebook code, but mostly at a syntactic level.
 They can extract functions or reorganize modules, yet they do not capture the original intent or implicit assumptions behind the transformations.
-As a result, ownership becomes blurred and debugging more difficult, because the reshaped code no longer clearly belongs to either the data scientist or the engineer.
+As a result, ownership becomes blurred and debugging more difficult because the reshaped code no longer clearly belongs to either the data scientist or the engineer.
 
 
 ## Purpose
