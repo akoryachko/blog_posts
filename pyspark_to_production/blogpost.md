@@ -390,6 +390,7 @@ The function below creates command-line arguments for all fields defined in the 
 ```python
 from dataclasses import fields
 import argparse
+
 def dataclass_to_argparser(cls) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
 
@@ -466,6 +467,7 @@ Here we add the `blog_posts` directory (two levels above `notebooks`) to Python'
 Next, import the main classes and create the configuration and job instances:
 ```python
 from pyspark_to_production.src.tip_amount_model import TipAmountModelConfig, TipAmountModel
+
 config = TipAmountModelConfig()
 job = TipAmountModel(config)
 ```
@@ -778,10 +780,8 @@ First, let's define a single shared Spark session for all the tests because recr
 Adding a `pytest` fixture with session-level scope to the global settings module `conftest.py` will do the trick:
 ```python
 from collections.abc import Generator
-
 import pytest
 from pyspark.sql import SparkSession
-
 
 @pytest.fixture(scope="session")
 def spark() -> Generator:
