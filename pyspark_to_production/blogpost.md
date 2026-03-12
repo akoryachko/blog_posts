@@ -213,6 +213,13 @@ sdf_prepared_data = (
 **Grouping logic into abstraction levels**  
 Filtering and feature engineering form logical units in the transformation step of the code:
 ```python
+def transform() -> None:
+    sdfs["prepared_data"] = (
+        sdfs["taxi_trip_data"]
+        .transform(filter_data)
+        .transform(add_features)
+    )
+
 def filter_data(sdf: DataFrame) -> DataFrame:
     return (
         sdf
@@ -235,13 +242,6 @@ def add_features(sdf: DataFrame) -> DataFrame:
             F.when(F.col("store_and_fwd_flag") == "N", 0)
             .otherwise(1)
         )
-    )
-
-def transform() -> None:
-    sdfs["prepared_data"] = (
-        sdfs["taxi_trip_data"]
-        .transform(filter_data)
-        .transform(add_features)
     )
 ```
 
