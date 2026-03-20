@@ -842,6 +842,7 @@ Tests can then be executed from the project root with:
 python -m pytest
 ```
 Optional flags:
+
 - `-vv` to display test names;
 - `-s` to show print statements and logs.
 
